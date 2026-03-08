@@ -251,7 +251,9 @@ class MasterRobot:
         self.q_des = self.q.copy()
         
     def ik_dls(self, x_des, damp=0.01):
-        for _ in range(5):
+        # Siempre partir de q actual para evitar drift en espacio nulo
+        self.q_des = self.q.copy()
+        for _ in range(10):
             x_cur = fk_3r(self.q_des)
             e_x = x_des - x_cur
             if np.linalg.norm(e_x) < 1e-4:
@@ -418,9 +420,14 @@ def main(slave_ip):
         
         return [link_line, ef_dot] + lines_tau + [line_Fx, line_Fy] + lines_q
 
+    key_map = {'up': 'up', 'down': 'down', 'left': 'left', 'right': 'right',
+               'w': 'up', 's': 'down', 'a': 'left', 'd': 'right'}
+
     def on_key_press(event):
-        if event.key in ('up', 'down', 'left', 'right'):
-            robot.keys_held.add(event.key)
+        print(f"[KEY] press: '{event.key}'")  # debug
+        mapped = key_map.get(event.key)
+        if mapped:
+            robot.keys_held.add(mapped)
         elif event.key == 'q': robot.gripper_open = True
         elif event.key == 'e': robot.gripper_open = False
         elif event.key == 'escape':
@@ -428,7 +435,9 @@ def main(slave_ip):
             plt.close()
 
     def on_key_release(event):
-        robot.keys_held.discard(event.key)
+        mapped = key_map.get(event.key)
+        if mapped:
+            robot.keys_held.discard(mapped)
 
     fig.canvas.mpl_connect('key_press_event', on_key_press)
     fig.canvas.mpl_connect('key_release_event', on_key_release)
