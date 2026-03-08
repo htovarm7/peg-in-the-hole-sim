@@ -201,6 +201,7 @@ class MasterNetClient:
         self.sock_rx.settimeout(0.005)
         self.Fe = np.zeros(2)
         self.contact = False
+        self.slave_state = "APROXIMACIÓN"
         self.last_recv_time = 0.0
         self._thread = threading.Thread(target=self._recv_loop, daemon=True)
         self._thread.start()
@@ -216,6 +217,7 @@ class MasterNetClient:
                 parsed = json.loads(data.decode())
                 self.Fe = np.array(parsed["Fe"])
                 self.contact = bool(parsed["contact"])
+                self.slave_state = parsed.get("state", "APROXIMACIÓN")
                 self.last_recv_time = time.time()
             except (socket.timeout, json.JSONDecodeError):
                 pass
@@ -344,13 +346,20 @@ def setup_plots(robot):
     ax_tau.legend(loc='upper right', fontsize=9, facecolor='#1a1a2e', labelcolor='white')
     ax_tau.axhline(y=0, color='#444', linewidth=0.8)
     
-    # Panel 3: Fuerzas de contacto
-    ax_force.set_title('Fuerzas de Contacto Reflejadas [N]', fontsize=11)
+    # Panel 3: Fuerzas de contacto (PANEL CLAVE para operación a ciegas)
+    ax_force.set_title('FUERZAS DE CONTACTO [N] — GUÍA HÁPTICA', fontsize=12, fontweight='bold')
     ax_force.set_xlabel('Tiempo [s]'); ax_force.set_ylabel('F [N]')
-    line_Fx, = ax_force.plot([], [], color=C[4], linewidth=1.8, label='Fx')
-    line_Fy, = ax_force.plot([], [], color=C[5], linewidth=1.8, label='Fy')
-    ax_force.legend(loc='upper right', fontsize=9, facecolor='#1a1a2e', labelcolor='white')
+    line_Fx, = ax_force.plot([], [], color=C[4], linewidth=2.5, label='Fx (lateral)')
+    line_Fy, = ax_force.plot([], [], color=C[5], linewidth=2.5, label='Fy (inserción)')
     ax_force.axhline(y=0, color='#444', linewidth=0.8)
+    ax_force.axhline(y=2.0, color='#FF4444', linewidth=1.2, linestyle='--', label='Umbral contacto')
+    ax_force.legend(loc='upper right', fontsize=9, facecolor='#1a1a2e', labelcolor='white')
+    # Indicador grande de estado del esclavo (visible a ciegas)
+    state_text = ax_force.text(0.5, 0.92, 'APROXIMACIÓN', transform=ax_force.transAxes,
+                               color='#888888', fontsize=16, fontweight='bold',
+                               ha='center', va='top',
+                               bbox=dict(boxstyle='round,pad=0.4', facecolor='#1a1a2e',
+                                         edgecolor='#444', alpha=0.95))
     
     # Panel 4: Ángulos articulares
     ax_q.set_title('Ángulos Articulares q [rad]', fontsize=11)
@@ -360,14 +369,14 @@ def setup_plots(robot):
     
     plt.tight_layout(rect=[0, 0.02, 1, 0.96])
     
-    return fig, (ax_robot, ax_tau, ax_force, ax_q), (link_line, ef_dot, conn_text), lines_tau, (line_Fx, line_Fy), lines_q
+    return fig, (ax_robot, ax_tau, ax_force, ax_q), (link_line, ef_dot, conn_text, state_text), lines_tau, (line_Fx, line_Fy), lines_q
 
 
 def main(slave_ip):
     robot = MasterRobot(slave_ip)
     fig, axes, arm_lines, lines_tau, force_lines, lines_q = setup_plots(robot)
     ax_robot, ax_tau, ax_force, ax_q = axes
-    link_line, ef_dot, conn_text = arm_lines
+    link_line, ef_dot, conn_text, state_text = arm_lines
     line_Fx, line_Fy = force_lines
     
     running = [True]
@@ -399,6 +408,17 @@ def main(slave_ip):
         else:
             conn_text.set_text('SIN CONEXIÓN')
             conn_text.set_color('#FF4444')
+
+        # Actualizar indicador de estado del esclavo (guía para operación a ciegas)
+        slave_st = robot.net.slave_state
+        state_text.set_text(slave_st)
+        state_colors = {
+            "APROXIMACIÓN": "#888888",
+            "CONTACTO": "#FF6B6B",
+            "INSERCIÓN": "#FFD700",
+            "COMPLETADO ": "#69FF47",
+        }
+        state_text.set_color(state_colors.get(slave_st, "#888888"))
         
         t_win = 5.0
         mask = (t > robot.t - t_win) if robot.t > t_win else np.ones(n, bool)

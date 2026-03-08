@@ -208,11 +208,11 @@ class SlaveNetServer:
             except (socket.timeout, json.JSONDecodeError, AttributeError):
                 pass
                 
-    def send_force(self, Fe, contact):
-        """Envía fuerza de contacto al maestro usando la IP real recibida."""
+    def send_force(self, Fe, contact, state="APROXIMACIÓN"):
+        """Envía fuerza de contacto y estado al maestro usando la IP real recibida."""
         if self.master_addr is None:
             return
-        msg = json.dumps({"Fe": Fe.tolist(), "contact": int(contact)})
+        msg = json.dumps({"Fe": Fe.tolist(), "contact": int(contact), "state": state})
         try:
             self.sock.sendto(msg.encode(), (self.master_addr[0], self.port_tx))
         except Exception:
@@ -272,8 +272,8 @@ class SlaveRobot:
         # Integrar dinámica
         self.q, self.dq = integrate_dynamics(self.q, self.dq, tau)
         
-        # Enviar fuerza de contacto al maestro (para feedback háptico)
-        self.net.send_force(F_contact, in_contact)
+        # Enviar fuerza de contacto y estado al maestro (para feedback háptico)
+        self.net.send_force(F_contact, in_contact, state_str)
         
         # Registrar datos
         i = self.idx % 500
