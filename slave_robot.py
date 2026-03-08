@@ -172,8 +172,8 @@ def impedance_control(q, dq, x_des, dx_des, q_des_prev, F_contact=None, kd=KD_IM
     C_mat = coriolis_matrix(q, dq)
     tau = tau_imp + g_vec + C_mat @ dq
     
-    # Saturar torques
-    tau = np.clip(tau, -50.0, 50.0)
+    # Saturar torques (límite alto, es simulación)
+    tau = np.clip(tau, -500.0, 500.0)
     return tau, F_total, e_x
 
 # SERVIDOR DE RED ESCLAVO
@@ -222,7 +222,7 @@ class SlaveNetServer:
 class SlaveRobot:
     def __init__(self, master_ip="127.0.0.1"):
         # Estado inicial: robot extendido hacia el agujero
-        self.q = np.array([0.6, -0.5, 0.1])
+        self.q = np.array([0.8, -0.6, 0.3])
         self.dq = np.zeros(3)
         self.q_des_prev = self.q.copy()
         
