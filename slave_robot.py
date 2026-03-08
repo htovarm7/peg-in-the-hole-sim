@@ -27,6 +27,8 @@ DT = 0.01
 # ganancias de impedancia
 KD_IMP = 400.0 # rigidez virtual [N/m] Kd de la impedancia
 BD_IMP = 40.0 # amortiguamiento virtual [N s/m]
+
+# MOVEMENT
 KP_ART = np.diag([100.0, 80.0, 60.0]) # ganancias Computed Torque
 KV_ART = np.diag([20.0, 16.0, 12.0])
 

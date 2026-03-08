@@ -8,10 +8,10 @@ Ejecutar en la PC MAESTRO:
 python3 master_robot.py --slave-ip <IP_ESCLAVO>
 
 Controles:
-W/S mover efector final en +y/-y
-A/D mover efector final en -x/+x
+Flechas arriba/abajo mover efector final en +y/-y
+Flechas izq/der mover efector final en -x/+x
 Q/E abrir/cerrar pinza
-ESC salir y guardar datos
+ESC salir
 """
 
 import numpy as np
@@ -25,9 +25,8 @@ import time
 import json
 import argparse
 
-# Deshabilitar atajos de teclado de matplotlib que chocan con WASD/QE
-for key in ['keymap.quit', 'keymap.quit_all', 'keymap.save',
-            'keymap.back', 'keymap.forward', 'keymap.home']:
+# Deshabilitar TODOS los atajos de teclado de matplotlib para que no roben WASD/QE
+for key in [k for k in plt.rcParams if k.startswith('keymap.')]:
     plt.rcParams[key] = []
 
 # PARÁMETROS DEL ROBOT 3R
@@ -37,7 +36,7 @@ G_GRAV = 9.81 # aceleración gravitacional [m/s^2]
 
 # Ganancias del Computed Torque
 KP = np.diag([120.0, 100.0, 80.0]) # rigidez articular
-KV = np.diag([25.0, 20.0, 15.0]) # amortiguamiento
+KV = np.diag([35.0, 28.0, 20.0]) # amortiguamiento (2*sqrt(KP) aprox.)
 
 # Paso de integración
 DT = 0.01 # 100 Hz
@@ -234,7 +233,7 @@ class MasterRobot:
         self.ddq_des = np.zeros(3)
         
         self.v_cart = np.zeros(2)
-        self.v_step = 0.05
+        self.v_step = 0.15
         self.keys_held = set()
 
         self.net = MasterNetClient(slave_ip)
@@ -265,10 +264,10 @@ class MasterRobot:
     def step(self):
         v = self.v_step
         vx, vy = 0.0, 0.0
-        if 'w' in self.keys_held: vy += v
-        if 's' in self.keys_held: vy -= v
-        if 'd' in self.keys_held: vx += v
-        if 'a' in self.keys_held: vx -= v
+        if 'up' in self.keys_held: vy += v
+        if 'down' in self.keys_held: vy -= v
+        if 'right' in self.keys_held: vx += v
+        if 'left' in self.keys_held: vx -= v
         self.v_cart = np.array([vx, vy])
 
         x_cur = fk_3r(self.q)
@@ -420,7 +419,7 @@ def main(slave_ip):
         return [link_line, ef_dot] + lines_tau + [line_Fx, line_Fy] + lines_q
 
     def on_key_press(event):
-        if event.key in ('w', 's', 'a', 'd'):
+        if event.key in ('up', 'down', 'left', 'right'):
             robot.keys_held.add(event.key)
         elif event.key == 'q': robot.gripper_open = True
         elif event.key == 'e': robot.gripper_open = False
