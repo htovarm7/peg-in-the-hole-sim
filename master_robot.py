@@ -25,6 +25,11 @@ import time
 import json
 import argparse
 
+# Deshabilitar atajos de teclado de matplotlib que chocan con WASD/QE
+for key in ['keymap.quit', 'keymap.quit_all', 'keymap.save',
+            'keymap.back', 'keymap.forward', 'keymap.home']:
+    plt.rcParams[key] = []
+
 # PARÁMETROS DEL ROBOT 3R
 L1, L2, L3 = 0.35, 0.30, 0.20 # longitudes eslabones [m]
 M1, M2, M3 = 1.5, 1.0, 0.5 # masas de eslabones [kg]
