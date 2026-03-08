@@ -26,7 +26,7 @@ DT = 0.01
 
 # ganancias de impedancia
 KD_IMP = 400.0 # rigidez virtual [N/m] Kd de la impedancia
-BD_IMP = 40.0 # amortiguamiento virtual [N s/m]
+BD_IMP = 60.0 # amortiguamiento virtual [N s/m]
 
 # MOVEMENT
 KP_ART = np.diag([100.0, 80.0, 60.0]) # ganancias Computed Torque
@@ -173,7 +173,7 @@ def impedance_control(q, dq, x_des, dx_des, q_des_prev, F_contact=None, kd=KD_IM
     tau = tau_imp + g_vec + C_mat @ dq
     
     # Saturar torques
-    tau = np.clip(tau, -20.0, 20.0)
+    tau = np.clip(tau, -50.0, 50.0)
     return tau, F_total, e_x
 
 # SERVIDOR DE RED ESCLAVO

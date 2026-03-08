@@ -163,7 +163,7 @@ def computed_torque(q, dq, q_des, dq_des, ddq_des, kp=KP, kv=KV, F_ext=None):
         J = jacobian_3r(q)
         tau += J.T @ F_ext
         
-    tau = np.clip(tau, -20.0, 20.0)
+    tau = np.clip(tau, -50.0, 50.0)
     return tau, e, de
 
 # INTEGRADOR EULER (dinámica del robot)
