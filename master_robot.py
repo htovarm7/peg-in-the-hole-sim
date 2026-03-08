@@ -233,7 +233,7 @@ class MasterRobot:
         self.ddq_des = np.zeros(3)
         
         self.v_cart = np.zeros(2)
-        self.v_step = 0.15
+        self.v_step = 0.40
         self.keys_held = set()
 
         self.net = MasterNetClient(slave_ip)
