@@ -197,6 +197,7 @@ class MasterNetClient:
         self.sock_rx.settimeout(0.005)
         self.Fe = np.zeros(2)
         self.contact = False
+        self.last_recv_time = 0.0
         self._thread = threading.Thread(target=self._recv_loop, daemon=True)
         self._thread.start()
         
@@ -211,6 +212,7 @@ class MasterNetClient:
                 parsed = json.loads(data.decode())
                 self.Fe = np.array(parsed["Fe"])
                 self.contact = bool(parsed["contact"])
+                self.last_recv_time = time.time()
             except (socket.timeout, json.JSONDecodeError):
                 pass
 
@@ -228,7 +230,8 @@ class MasterRobot:
         
         self.v_cart = np.zeros(2)
         self.v_step = 0.05
-        
+        self.keys_held = set()
+
         self.net = MasterNetClient(slave_ip)
         
         N = 500
@@ -255,6 +258,14 @@ class MasterRobot:
             self.q_des = self.q_des + Jp @ e_x
             
     def step(self):
+        v = self.v_step
+        vx, vy = 0.0, 0.0
+        if 'w' in self.keys_held: vy += v
+        if 's' in self.keys_held: vy -= v
+        if 'd' in self.keys_held: vx += v
+        if 'a' in self.keys_held: vx -= v
+        self.v_cart = np.array([vx, vy])
+
         x_cur = fk_3r(self.q)
         x_des = x_cur + self.v_cart * DT
         
@@ -310,6 +321,10 @@ def setup_plots(robot):
     ax_robot.set_xlabel('x [m]'); ax_robot.set_ylabel('y [m]')
     link_line, = ax_robot.plot([], [], 'o-', color=C[0], linewidth=3, markersize=8, markerfacecolor=C[1])
     ef_dot, = ax_robot.plot([], [], 's', color=C[2], markersize=12, markerfacecolor=C[3], zorder=5)
+    conn_text = ax_robot.text(0.02, 0.96, 'SIN CONEXIÓN', transform=ax_robot.transAxes,
+                              color='#FF4444', fontsize=10, fontweight='bold',
+                              verticalalignment='top',
+                              bbox=dict(boxstyle='round,pad=0.3', facecolor='#1a1a2e', edgecolor='#333', alpha=0.9))
     
     hole_x, hole_y = 0.55, 0.10
     ax_robot.add_patch(plt.Circle((hole_x, hole_y), 0.025, color='#FFD700', alpha=0.6))
@@ -339,14 +354,14 @@ def setup_plots(robot):
     
     plt.tight_layout(rect=[0, 0.02, 1, 0.96])
     
-    return fig, (ax_robot, ax_tau, ax_force, ax_q), (link_line, ef_dot), lines_tau, (line_Fx, line_Fy), lines_q
+    return fig, (ax_robot, ax_tau, ax_force, ax_q), (link_line, ef_dot, conn_text), lines_tau, (line_Fx, line_Fy), lines_q
 
 
 def main(slave_ip):
     robot = MasterRobot(slave_ip)
     fig, axes, arm_lines, lines_tau, force_lines, lines_q = setup_plots(robot)
     ax_robot, ax_tau, ax_force, ax_q = axes
-    link_line, ef_dot = arm_lines
+    link_line, ef_dot, conn_text = arm_lines
     line_Fx, line_Fy = force_lines
     
     running = [True]
@@ -371,6 +386,13 @@ def main(slave_ip):
         pts = fk_3r_full(robot.q)
         link_line.set_data(pts[:,0], pts[:,1])
         ef_dot.set_data([pts[-1,0]], [pts[-1,1]])
+
+        if robot.net.last_recv_time > 0 and (time.time() - robot.net.last_recv_time) < 1.0:
+            conn_text.set_text('CONECTADO')
+            conn_text.set_color('#69FF47')
+        else:
+            conn_text.set_text('SIN CONEXIÓN')
+            conn_text.set_color('#FF4444')
         
         t_win = 5.0
         mask = (t > robot.t - t_win) if robot.t > t_win else np.ones(n, bool)
@@ -393,11 +415,8 @@ def main(slave_ip):
         return [link_line, ef_dot] + lines_tau + [line_Fx, line_Fy] + lines_q
 
     def on_key_press(event):
-        v = robot.v_step
-        if event.key == 'w': robot.v_cart = np.array([0, v])
-        elif event.key == 's': robot.v_cart = np.array([0, -v])
-        elif event.key == 'd': robot.v_cart = np.array([v, 0])
-        elif event.key == 'a': robot.v_cart = np.array([-v, 0])
+        if event.key in ('w', 's', 'a', 'd'):
+            robot.keys_held.add(event.key)
         elif event.key == 'q': robot.gripper_open = True
         elif event.key == 'e': robot.gripper_open = False
         elif event.key == 'escape':
@@ -405,7 +424,7 @@ def main(slave_ip):
             plt.close()
 
     def on_key_release(event):
-        robot.v_cart = np.zeros(2)
+        robot.keys_held.discard(event.key)
 
     fig.canvas.mpl_connect('key_press_event', on_key_press)
     fig.canvas.mpl_connect('key_release_event', on_key_release)

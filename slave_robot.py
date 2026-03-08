@@ -189,6 +189,8 @@ class SlaveNetServer:
         self.sock.settimeout(0.005)
         self.x_des = np.array([0.55, 0.40]) # posición inicial deseada
         self.gripper = True
+        self.master_addr = None
+        self.last_recv_time = 0.0
         self._thread = threading.Thread(target=self._recv_loop, daemon=True)
         self._thread.start()
         
@@ -199,15 +201,18 @@ class SlaveNetServer:
                 parsed = json.loads(data.decode())
                 self.x_des = np.array(parsed["xd"])
                 self.gripper = bool(parsed["gripper"])
-                self.master_addr = addr # guardar para responder
+                self.master_addr = addr
+                self.last_recv_time = time.time()
             except (socket.timeout, json.JSONDecodeError, AttributeError):
                 pass
                 
-    def send_force(self, Fe, contact, master_port=9002):
-        """Envía fuerza de contacto al maestro."""
+    def send_force(self, Fe, contact):
+        """Envía fuerza de contacto al maestro usando la IP real recibida."""
+        if self.master_addr is None:
+            return
         msg = json.dumps({"Fe": Fe.tolist(), "contact": int(contact)})
         try:
-            self.sock.sendto(msg.encode(), (self.master_ip, master_port))
+            self.sock.sendto(msg.encode(), (self.master_addr[0], self.port_tx))
         except Exception:
             pass
 
@@ -313,6 +318,10 @@ def setup_slave_plots(robot):
     link_line, = ax_robot.plot([], [], 'o-', color=C[2], linewidth=3, markersize=8, markerfacecolor=C[0])
     peg_line, = ax_robot.plot([], [], '-', color=C[3], linewidth=5, zorder=4)
     state_text = ax_robot.text(0.02, 0.96, '', transform=ax_robot.transAxes, color='#FFD700', fontsize=10, fontweight='bold', verticalalignment='top')
+    conn_text = ax_robot.text(0.02, 0.88, 'SIN CONEXIÓN', transform=ax_robot.transAxes,
+                              color='#FF4444', fontsize=10, fontweight='bold',
+                              verticalalignment='top',
+                              bbox=dict(boxstyle='round,pad=0.3', facecolor='#1a1a2e', edgecolor='#333', alpha=0.9))
     force_arrow = ax_robot.annotate('', xy=(0, 0), xytext=(0, 0), arrowprops=dict(arrowstyle='->', color='red', lw=2.5), zorder=5)
     
     # Panel 2: Fuerzas de contacto
@@ -340,13 +349,13 @@ def setup_slave_plots(robot):
     ax_err.legend(loc='upper right', fontsize=8, facecolor='#1a1a2e', labelcolor='white')
     
     plt.tight_layout(rect=[0, 0.02, 1, 0.96])
-    return (fig, (ax_robot, ax_force, ax_tau, ax_err), (link_line, peg_line, state_text, force_arrow), (line_Fx, line_Fy), lines_tau, (line_ex, line_ey))
+    return (fig, (ax_robot, ax_force, ax_tau, ax_err), (link_line, peg_line, state_text, conn_text, force_arrow), (line_Fx, line_Fy), lines_tau, (line_ex, line_ey))
 
 def main(master_ip):
     robot = SlaveRobot(master_ip)
     (fig, axes, robot_artists, force_lines, lines_tau, err_lines) = setup_slave_plots(robot)
     ax_robot, ax_force, ax_tau, ax_err = axes
-    link_line, peg_line, state_text, force_arrow = robot_artists
+    link_line, peg_line, state_text, conn_text, force_arrow = robot_artists
     line_Fx, line_Fy = force_lines
     line_ex, line_ey = err_lines
     
@@ -381,6 +390,13 @@ def main(master_ip):
             peg_end = ef + peg_dir * PEG_LENGTH
             peg_line.set_data([peg_start[0], peg_end[0]], [peg_start[1], peg_end[1]])
         state_text.set_text(f"Estado: {robot.contact_state}")
+
+        if robot.net.last_recv_time > 0 and (time.time() - robot.net.last_recv_time) < 1.0:
+            conn_text.set_text('CONECTADO')
+            conn_text.set_color('#69FF47')
+        else:
+            conn_text.set_text('SIN CONEXIÓN')
+            conn_text.set_color('#FF4444')
         
         # Fuerzas
         ax_force.set_xlim(max(0, robot.t-t_win), max(t_win, robot.t))
